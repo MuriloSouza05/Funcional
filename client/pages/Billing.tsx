@@ -43,6 +43,8 @@ import { DocumentForm } from '@/components/Billing/DocumentForm';
 import { DocumentsTable } from '@/components/Billing/DocumentsTable';
 import { DocumentViewDialog } from '@/components/Billing/DocumentViewDialog';
 import { EmailSendModal } from '@/components/Billing/EmailSendModal';
+import { useBilling } from '@/hooks/useData';
+import { apiService } from '@/services/api';
 import {
   Estimate,
   Invoice,
@@ -183,8 +185,6 @@ export function Billing() {
   const [editingDocument, setEditingDocument] = useState<any>(undefined);
   const [viewingDocument, setViewingDocument] = useState<any>(null);
 
-  const [estimates, setEstimates] = useState<Estimate[]>(mockEstimates);
-  const [invoices, setInvoices] = useState<Invoice[]>(mockInvoices);
 
 
   const [selectedDocs, setSelectedDocs] = useState<string[]>([]);
@@ -192,12 +192,38 @@ export function Billing() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [showEmailModal, setShowEmailModal] = useState(false);
 
-  // Combine all documents
-  const allDocuments = [...estimates, ...invoices];
+  // Real API data instead of mock data
+  const { 
+    documents, 
+    loading: documentsLoading, 
+    error: documentsError,
+    createDocument,
+    updateDocument,
+    deleteDocument 
+  } = useBilling({ 
+    search: searchTerm,
+    type: activeTab === 'all' ? undefined : activeTab,
+    status: statusFilter === 'all' ? undefined : statusFilter
+  });
+
+  const [stats, setStats] = useState(null);
+  
+  React.useEffect(() => {
+    const loadStats = async () => {
+      try {
+        const data = await apiService.getBillingStats();
+        setStats(data);
+      } catch (error) {
+        console.error('Erro ao carregar estatísticas:', error);
+      }
+    };
+
+    loadStats();
+  }, [documents]);
 
   // Filter documents
   const filteredDocuments = useMemo(() => {
-    let filtered = allDocuments;
+    let filtered = documents || [];
 
     // Filter by tab
     if (activeTab !== 'all') {
@@ -209,7 +235,7 @@ export function Billing() {
       filtered = filtered.filter(doc =>
         doc.number.toLowerCase().includes(searchTerm.toLowerCase()) ||
         doc.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        doc.receiverName.toLowerCase().includes(searchTerm.toLowerCase())
+        (doc.receiver_name || doc.receiverName || '').toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
@@ -219,46 +245,8 @@ export function Billing() {
     }
 
     return filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [allDocuments, activeTab, searchTerm, statusFilter]);
+  }, [documents, activeTab, searchTerm, statusFilter]);
 
-  // Calculate statistics
-  const stats: BillingStats = useMemo(() => {
-    const totalEstimates = estimates.length;
-    const totalInvoices = invoices.length;
-
-    const pendingAmount = allDocuments
-      .filter(doc => ['Pendente', 'SENT', 'VIEWED'].includes(doc.status))
-      .reduce((sum, doc) => sum + doc.total, 0);
-
-    const paidAmount = allDocuments
-      .filter(doc => doc.status === 'PAID')
-      .reduce((sum, doc) => sum + doc.total, 0);
-
-    const overdueAmount = allDocuments
-      .filter(doc => doc.status === 'OVERDUE' ||
-        (new Date(doc.dueDate) < new Date() && !['PAID', 'CANCELLED'].includes(doc.status)))
-      .reduce((sum, doc) => sum + doc.total, 0);
-
-    const thisMonth = new Date();
-    const thisMonthRevenue = allDocuments
-      .filter(doc => {
-        const docDate = new Date(doc.date);
-        return docDate.getMonth() === thisMonth.getMonth() &&
-               docDate.getFullYear() === thisMonth.getFullYear() &&
-               doc.status === 'PAID';
-      })
-      .reduce((sum, doc) => sum + doc.total, 0);
-
-    return {
-      totalEstimates,
-      totalInvoices,
-      pendingAmount,
-      paidAmount,
-      overdueAmount,
-      thisMonthRevenue,
-      averagePaymentTime: 15, // Mock value
-    };
-  }, [estimates, invoices, allDocuments]);
 
   const handleCreateDocument = (type: 'estimate' | 'invoice') => {
     setDocumentType(type);
@@ -266,7 +254,8 @@ export function Billing() {
     setShowDocumentForm(true);
   };
 
-  const handleSubmitDocument = (data: any) => {
+  const handleSubmitDocument = async (data: any) => {
+    try {
     // CORREÇÃO: Verificar se está editando documento existente ou criando novo
     const isEditing = !!editingDocument;
 
@@ -385,8 +374,7 @@ export function Billing() {
   };
 
   const handleDeleteDoc = (docId: string) => {
-    setEstimates(estimates.filter(doc => doc.id !== docId));
-    setInvoices(invoices.filter(doc => doc.id !== docId));
+    deleteDocument(docId);
     setSelectedDocs(selectedDocs.filter(id => id !== docId));
   };
 
@@ -756,97 +744,10 @@ export function Billing() {
 
       // Criar link temporário para download
       const link = document.createElement('a');
-      link.href = url;
-      link.download = filename.replace('.pdf', '.html'); // HTML para visualizar no navegador
-      link.style.display = 'none';
-
-      // Adicionar ao DOM, clicar e remover
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-      // Limpar URL
-      URL.revokeObjectURL(url);
-
-      // Mostrar notificação de sucesso elegante
-      const notification = document.createElement('div');
-      notification.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        background: linear-gradient(135deg, #059669, #065f46);
-        color: white;
-        padding: 20px 28px;
-        border-radius: 12px;
-        box-shadow: 0 10px 25px rgba(5, 150, 105, 0.3);
-        z-index: 9999;
-        transform: translateX(100%);
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        font-weight: 500;
-        max-width: 380px;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      `;
-      notification.innerHTML = `
-        <div style="display: flex; align-items: center; gap: 12px;">
-          <div style="font-size: 24px;">📄</div>
-          <div>
-            <div style="font-weight: 600; margin-bottom: 4px;">Documento baixado!</div>
-            <div style="opacity: 0.9; font-size: 13px;">
-              ${document.type === 'estimate' ? 'Orçamento' :
-                document.type === 'invoice' ? 'Fatura' : 'Fatura'} ${document.number}
-            </div>
-          </div>
-        </div>
-      `;
-
-      document.body.appendChild(notification);
-
-      setTimeout(() => {
-        notification.style.transform = 'translateX(0)';
-      }, 50);
-
-      setTimeout(() => {
-        notification.style.transform = 'translateX(100%)';
-        setTimeout(() => {
-          if (document.body.contains(notification)) {
-            document.body.removeChild(notification);
-          }
-        }, 300);
-      }, 4000);
-
-    } catch (error) {
-      console.error('Erro ao fazer download do documento:', error);
-
-      // Mostrar erro com estilo
-      const errorNotification = document.createElement('div');
-      errorNotification.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        background: linear-gradient(135deg, #ef4444, #dc2626);
-        color: white;
-        padding: 20px 28px;
-        border-radius: 12px;
-        box-shadow: 0 10px 25px rgba(239, 68, 68, 0.3);
-        z-index: 9999;
-        font-weight: 500;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      `;
-      errorNotification.innerHTML = `
-        <div style="display: flex; align-items: center; gap: 12px;">
-          <div style="font-size: 24px;">❌</div>
-          <div>
-            <div style="font-weight: 600;">Erro no download</div>
-            <div style="opacity: 0.9; font-size: 13px;">Tente novamente em alguns instantes</div>
-          </div>
-        </div>
-      `;
-
-      document.body.appendChild(errorNotification);
-      setTimeout(() => {
-        if (document.body.contains(errorNotification)) {
-          document.body.removeChild(errorNotification);
-        }
+      if (editingDocument) {
+        await updateDocument(editingDocument.id, { ...data, type: documentType });
+      } else {
+        await createDocument({ ...data, type: documentType });
       }, 4000);
     }
   };
@@ -894,9 +795,12 @@ export function Billing() {
         throw new Error(`Erro na API: ${response.status}`);
       }
 
-      const result = await response.json();
       console.log('Email enviado com sucesso:', result);
 
+    } catch (error) {
+      console.error('Erro ao salvar documento:', error);
+      alert('Erro ao salvar documento. Tente novamente.');
+    }
       return result;
     } catch (error) {
       console.error('Erro ao enviar email:', error);
@@ -962,9 +866,9 @@ export function Billing() {
               <Clock className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{formatCurrency(stats.pendingAmount)}</div>
+              <div className="text-2xl font-bold">{formatCurrency(stats?.pendingAmount || 0)}</div>
               <p className="text-xs text-muted-foreground">
-                {stats.totalEstimates + stats.totalInvoices} documentos
+                {(stats?.totalEstimates || 0) + (stats?.totalInvoices || 0)} documentos
               </p>
             </CardContent>
           </Card>
@@ -975,7 +879,7 @@ export function Billing() {
               <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-600">{formatCurrency(stats.paidAmount)}</div>
+              <div className="text-2xl font-bold text-green-600">{formatCurrency(stats?.paidAmount || 0)}</div>
               <p className="text-xs text-muted-foreground">
                 Documentos pagos
               </p>
@@ -988,7 +892,7 @@ export function Billing() {
               <AlertTriangle className="h-4 w-4 text-red-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-red-600">{formatCurrency(stats.overdueAmount)}</div>
+              <div className="text-2xl font-bold text-red-600">{formatCurrency(stats?.overdueAmount || 0)}</div>
               <p className="text-xs text-muted-foreground">
                 Necessitam cobrança
               </p>
@@ -998,13 +902,13 @@ export function Billing() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Este Mês</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                Todos ({documents?.length || 0})
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{formatCurrency(stats.thisMonthRevenue)}</div>
+                Orçamentos ({documents?.filter(d => d.type === 'estimate').length || 0})
               <p className="text-xs text-muted-foreground">
                 Receita realizada
-              </p>
+                Faturas ({documents?.filter(d => d.type === 'invoice').length || 0})
             </CardContent>
           </Card>
         </div>
@@ -1111,7 +1015,7 @@ export function Billing() {
         <EmailSendModal
           open={showEmailModal}
           onOpenChange={setShowEmailModal}
-          documents={allDocuments.filter(doc => selectedDocs.includes(doc.id)) || []}
+          documents={documents?.filter(doc => selectedDocs.includes(doc.id)) || []}
           onSendEmail={handleSendEmail}
         />
       </div>

@@ -59,96 +59,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { MoreHorizontal, Eye, Edit, Trash2 } from "lucide-react";
+import { useClients } from '@/hooks/useData';
 
-// Mock data - in real app would come from API
-const mockClients: Client[] = [
-  {
-    id: "1",
-    name: "Maria Silva Santos",
-    organization: "Silva & Associates",
-    email: "maria@silva.com.br",
-    mobile: "(11) 99999-1234",
-    country: "BR",
-    state: "São Paulo",
-    address: "Rua Augusta, 123, Cerqueira César",
-    city: "São Paulo",
-    zipCode: "01305-000",
-    budget: 15000,
-    currency: "BRL",
-    level: "Premium",
-    tags: ["Direito Civil", "Prioritário", "Empresa", "Premium"],
-    description: "Cliente premium com múltiplos casos",
-    cpf: "123.456.789-00",
-    rg: "12.345.678-9",
-    professionalTitle: "Empresária",
-    maritalStatus: "married",
-    birthDate: "1980-05-15",
-    inssStatus: "active",
-    amountPaid: 8000,
-    referredBy: "João Advogado",
-    registeredBy: "Dr. Silva - Sócio Gerente",
-    createdAt: "2024-01-01T10:00:00Z",
-    updatedAt: "2024-01-15T14:30:00Z",
-    status: "active",
-  },
-  {
-    id: "2",
-    name: "João Carlos Oliveira",
-    email: "joao@email.com",
-    mobile: "(11) 88888-5678",
-    country: "BR",
-    state: "Rio de Janeiro",
-    address: "Av. Copacabana, 456",
-    city: "Rio de Janeiro",
-    zipCode: "22070-000",
-    budget: 8500,
-    currency: "BRL",
-    tags: ["Trabalhista", "Demissão", "Rescisão"],
-    description: "Caso trabalhista - demissão sem justa causa",
-    cpf: "987.654.321-00",
-    maritalStatus: "single",
-    birthDate: "1985-09-20",
-    inssStatus: "inactive",
-    registeredBy: "Dra. Costa - Sócia Diretora",
-    createdAt: "2024-01-05T09:15:00Z",
-    updatedAt: "2024-01-10T16:45:00Z",
-    status: "active",
-  },
-];
-
-const mockDeals: Deal[] = [
-  {
-    id: "1",
-    title: "Consultoria Jurídica Empresarial",
-    contactName: "Ana Costa",
-    organization: "TechStart LTDA",
-    email: "ana@techstart.com",
-    mobile: "(11) 77777-9999",
-    address: "Rua da Inovação, 789, Vila Olímpia, São Paulo - SP",
-    budget: 25000,
-    currency: "BRL",
-    stage: "proposal",
-    tags: ["Direito Empresarial", "Startup"],
-    description: "Necessita de assessoria jurídica para expansão da empresa",
-    createdAt: "2024-01-10T10:00:00Z",
-    updatedAt: "2024-01-15T14:30:00Z",
-  },
-  {
-    id: "2",
-    title: "Ação Previdenciária",
-    contactName: "Roberto Silva",
-    email: "roberto@email.com",
-    mobile: "(11) 66666-8888",
-    address: "Rua das Flores, 321, Centro, São Paulo - SP",
-    budget: 12000,
-    currency: "BRL",
-    stage: "contacted",
-    tags: ["Previdenciário"],
-    description: "Aposentadoria negada pelo INSS",
-    createdAt: "2024-01-12T11:30:00Z",
-    updatedAt: "2024-01-16T09:15:00Z",
-  },
-];
 
 interface PipelineListViewProps {
   deals: Deal[];
@@ -292,7 +204,17 @@ export function CRM() {
   const [dealInitialStage, setDealInitialStage] = useState<
     DealStage | undefined
   >();
-  const [clients, setClients] = useState<Client[]>(mockClients);
+  
+  // Replace mock data with real API calls
+  const { 
+    clients, 
+    loading: clientsLoading, 
+    error: clientsError,
+    createClient,
+    updateClient,
+    deleteClient 
+  } = useClients({ search: searchTerm, status: statusFilter === 'all' ? undefined : statusFilter });
+  
   const [deals, setDeals] = useState<Deal[]>(mockDeals);
   const [selectedClients, setSelectedClients] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -395,53 +317,19 @@ export function CRM() {
     deals: filteredDeals.filter((deal) => deal.stage === stage.id),
   }));
 
-  const handleSubmitClient = (data: any) => {
+  const handleSubmitClient = async (data: any) => {
+    try {
     if (editingClient) {
-      setClients(
-        clients.map((client) =>
-          client.id === editingClient.id
-            ? { ...client, ...data, updatedAt: new Date().toISOString() }
-            : client,
-        ),
-      );
+        await updateClient(editingClient.id, data);
       setEditingClient(undefined);
     } else {
-      const newClient: Client = {
-        ...data,
-        id: Date.now().toString(),
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        status: "active" as const,
-      };
-      setClients([...clients, newClient]);
-
-      // NOVIDADE: Enviar notificação quando novo cliente for cadastrado
-      // Em produção, isso seria uma chamada para API de notificações
-      console.log("📢 NOTIFICAÇÃO ENVIADA: Novo cliente cadastrado", {
-        type: "info",
-        title: "Novo Cliente Cadastrado",
-        message: `${newClient.name} foi adicionado ao CRM`,
-        category: "client",
-        createdBy: "Usuário Atual", // Em produção: pegar do contexto de auth
-        clientData: {
-          id: newClient.id,
-          name: newClient.name,
-          email: newClient.email,
-          tags: newClient.tags,
-        },
-      });
-
-      // FUTURO: Integração com sistema de notificações
-      // await NotificationService.create({
-      //   type: 'client_created',
-      //   title: 'Novo Cliente Cadastrado',
-      //   message: `${newClient.name} foi adicionado ao CRM`,
-      //   entityId: newClient.id,
-      //   entityType: 'client',
-      //   userId: currentUser.id
-      // });
+        await createClient(data);
     }
     setShowClientForm(false);
+    } catch (error) {
+      console.error('Erro ao salvar cliente:', error);
+      alert('Erro ao salvar cliente. Tente novamente.');
+    }
   };
 
   const handleSelectClient = (clientId: string) => {
@@ -463,8 +351,13 @@ export function CRM() {
     setShowClientForm(true);
   };
 
-  const handleDeleteClient = (clientId: string) => {
-    setClients(clients.filter((client) => client.id !== clientId));
+  const handleDeleteClient = async (clientId: string) => {
+    try {
+      await deleteClient(clientId);
+    } catch (error) {
+      console.error('Erro ao excluir cliente:', error);
+      alert('Erro ao excluir cliente. Tente novamente.');
+    }
     setSelectedClients(selectedClients.filter((id) => id !== clientId));
   };
 
@@ -577,7 +470,7 @@ export function CRM() {
   };
 
   // Calculate metrics
-  const totalClients = clients.length;
+  const totalClients = clients?.length || 0;
   const activeClients = clients.filter((c) => c.status === "active").length;
   const totalRevenuePotential = deals.reduce(
     (sum, deal) => sum + deal.budget,
@@ -585,6 +478,37 @@ export function CRM() {
   );
   const wonDeals = deals.filter((d) => d.stage === "won").length;
 
+  // Loading state
+  if (clientsLoading) {
+    return (
+      <DashboardLayout>
+        <div className="space-y-6 p-6">
+          <div className="animate-pulse">
+            <div className="h-8 bg-gray-200 rounded w-1/4 mb-4"></div>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              {[1, 2, 3, 4].map(i => (
+                <div key={i} className="h-32 bg-gray-200 rounded"></div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  // Error state
+  if (clientsError) {
+    return (
+      <DashboardLayout>
+        <div className="space-y-6 p-6">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-red-600">Erro ao carregar CRM</h1>
+            <p className="text-muted-foreground">Tente recarregar a página</p>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
   return (
     <DashboardLayout>
       <div className="space-y-6 p-6">

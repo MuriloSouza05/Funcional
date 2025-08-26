@@ -66,45 +66,9 @@ import {
   DashboardRecebiveis,
   NotificacaoAutomatica,
 } from "@/types/receivables";
+import { useInvoices } from '@/hooks/useData';
+import { apiService } from '@/services/api';
 
-/**
- * DADOS MOCK PARA DEMONSTRAÇÃO
- * ============================
- *
- * BACKEND: Estes dados virão das seguintes APIs:
- * - GET /api/recebiveis/dashboard - Estatísticas gerais
- * - GET /api/recebiveis/faturas - Lista de faturas com filtros
- * - GET /api/recebiveis/clientes - Clientes com dados de cobrança
- * - GET /api/recebiveis/notificacoes - Notificações automáticas
- */
-
-const mockDashboard: DashboardRecebiveis = {
-  faturasPagas: 68,
-  faturasPendentes: 15,
-  faturasVencidas: 1,
-  faturasProximoVencimento: 4,
-  valorTotal: 187500,
-  valorPago: 142800,
-  valorPendente: 39200,
-  valorVencido: 5500,
-  novosClientes: 12,
-  taxaCobranças: 96.8,
-  tempoMedioPagamento: 8,
-  notificacoesAgendadas: 6,
-  faturas3Dias: [],
-  faturasVencidas: [],
-  faturamentoMensal: 142800,
-  crescimentoMensal: 22.4,
-  clientesAtivos: 84,
-};
-
-const mockInvoices: Invoice[] = [
-  // ÚNICA FATURA VENCIDA (conforme solicitado)
-  {
-    id: "1",
-    clienteId: "client1",
-    numeroFatura: "REC-2025-001",
-    valor: 5500,
     descricao: "Honorários Advocatícios - Dezembro/2024",
     servicoPrestado: "Consultoria Jurídica Especializada",
     dataEmissao: new Date("2024-12-01"),
@@ -338,8 +302,47 @@ export function Receivables() {
   const [showClientViewDialog, setShowClientViewDialog] = useState(false);
   const [viewingInvoice, setViewingInvoice] = useState<Invoice | null>(null);
   const [viewingClient, setViewingClient] = useState<any>(null);
-  const [invoices, setInvoices] = useState<Invoice[]>(mockInvoices);
+  
+  // Real API data instead of mock data
+  const { 
+    invoices, 
+    loading: invoicesLoading, 
+    error: invoicesError,
+    createInvoice,
+    updateInvoice,
+    deleteInvoice 
+  } = useInvoices({ 
+    search: searchTerm,
+    status: statusFilter === 'all' ? undefined : statusFilter
+  });
+  
   const [notifications, setNotifications] = useState<any[]>([]);
+  const [dashboard, setDashboard] = useState<DashboardRecebiveis | null>(null);
+  const [clients, setClients] = useState<any[]>([]);
+
+  // Load dashboard data
+  React.useEffect(() => {
+    const loadDashboard = async () => {
+      try {
+        const data = await apiService.getInvoiceDashboard();
+        setDashboard(data);
+      } catch (error) {
+        console.error('Erro ao carregar dashboard:', error);
+      }
+    };
+
+    const loadClients = async () => {
+      try {
+        const data = await apiService.getInvoiceClients();
+        setClients(data);
+      } catch (error) {
+        console.error('Erro ao carregar clientes:', error);
+      }
+    };
+
+    loadDashboard();
+    loadClients();
+  }, [invoices]);
 
   /**
    * FUNÇÃO PARA DETECÇÃO DE VENCIMENTOS (3 DIAS)
@@ -435,7 +438,8 @@ export function Receivables() {
       );
     });
 
-  const handleImportBilling = (importedInvoices: any[]) => {
+  const handleImportBilling = async (importedInvoices: any[]) => {
+    try {
     // Adicionar faturas importadas ao estado
     const newInvoices = importedInvoices.map((imported) => ({
       ...imported,
@@ -458,17 +462,18 @@ export function Receivables() {
     }));
 
     setInvoices((prev) => [...invoicesWithIds, ...prev]);
-
-    // Notificação de sucesso
-    console.log(
-      `��� ${newInvoices.length} nova(s) fatura(s) criada(s) com sucesso!`,
-    );
-
+      for (const invoice of importedInvoices) {
+        await createInvoice(invoice);
+      }
     // Se for recorrente, mostrar mensagem específica
     if (newInvoices.length > 1) {
       console.log(
         `🔄 Fatura recorrente criada com ${newInvoices.length} parcelas`,
       );
+    } catch (error) {
+      console.error('Erro ao importar faturas:', error);
+      alert('Erro ao importar faturas. Tente novamente.');
+    }
     }
   };
 
@@ -484,9 +489,15 @@ export function Receivables() {
     setShowViewDialog(true);
   };
 
-  const handleDeleteInvoice = (invoice: Invoice) => {
+  const handleDeleteInvoice = async (invoice: Invoice) => {
     if (confirm(`Deseja realmente excluir a fatura ${invoice.numeroFatura}?`)) {
-      setInvoices((prev) => prev.filter((inv) => inv.id !== invoice.id));
+      try {
+        await deleteInvoice(invoice.id);
+      } catch (error) {
+        console.error('Erro ao excluir fatura:', error);
+        alert('Erro ao excluir fatura. Tente novamente.');
+        return;
+      }
       setSelectedInvoices((prev) => prev.filter((id) => id !== invoice.id));
 
       // Fechar dialog automaticamente se estiver aberto
@@ -499,14 +510,9 @@ export function Receivables() {
     }
   };
 
-  const handleUpdateInvoiceStatus = (invoice: Invoice, newStatus: any) => {
-    setInvoices((prev) =>
-      prev.map((inv) =>
-        inv.id === invoice.id
-          ? { ...inv, status: newStatus, atualizadoEm: new Date() }
-          : inv,
-      ),
-    );
+  const handleUpdateInvoiceStatus = async (invoice: Invoice, newStatus: any) => {
+    try {
+      await updateInvoice(invoice.id, { status: newStatus });
 
     // Feedback visual para o usuário
     const statusLabels = {
@@ -526,61 +532,15 @@ export function Receivables() {
 
     // Se em produção, você pode usar um toast aqui ao invés de alert
     // toast.success(`Status alterado para: ${statusLabel}`);
+    } catch (error) {
+      console.error('Erro ao atualizar status:', error);
+      alert('Erro ao atualizar status. Tente novamente.');
+    }
   };
 
   // Gerar lista de clientes baseada nas faturas
   const getClientsFromInvoices = () => {
-    const clientsMap = new Map();
-
-    invoices.forEach((invoice) => {
-      const clientId = invoice.clienteId;
-      const clientName =
-        invoice.clienteNome ||
-        mockClientes.find((c) => c.id === clientId)?.nome ||
-        "Cliente Desconhecido";
-      const clientEmail =
-        invoice.clienteEmail ||
-        mockClientes.find((c) => c.id === clientId)?.email ||
-        "";
-      const clientPhone =
-        invoice.clienteTelefone ||
-        mockClientes.find((c) => c.id === clientId)?.telefone ||
-        "";
-
-      if (!clientsMap.has(clientId)) {
-        clientsMap.set(clientId, {
-          id: clientId,
-          nome: clientName,
-          email: clientEmail,
-          telefone: clientPhone,
-          whatsapp: mockClientes.find((c) => c.id === clientId)?.whatsapp,
-          totalFaturado: 0,
-          totalPago: 0,
-          faturasPendentes: 0,
-          ultimoPagamento: null,
-          faturas: [],
-        });
-      }
-
-      const client = clientsMap.get(clientId);
-      client.faturas.push(invoice);
-      client.totalFaturado += invoice.valor;
-
-      if (invoice.status === "paga") {
-        client.totalPago += invoice.valor;
-        if (
-          invoice.dataPagamento &&
-          (!client.ultimoPagamento ||
-            invoice.dataPagamento > client.ultimoPagamento)
-        ) {
-          client.ultimoPagamento = invoice.dataPagamento;
-        }
-      } else if (invoice.status === "pendente" || invoice.status === "nova") {
-        client.faturasPendentes += 1;
-      }
-    });
-
-    return Array.from(clientsMap.values());
+    return clients;
   };
 
   const handleViewClient = (client: any) => {
@@ -666,10 +626,10 @@ export function Receivables() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-green-600">
-                {mockDashboard.faturasPagas}
+                {dashboard?.faturasPagas || 0}
               </div>
               <p className="text-xs text-muted-foreground">
-                {formatCurrency(mockDashboard.valorPago)}
+                {formatCurrency(dashboard?.valorPago || 0)}
               </p>
             </CardContent>
           </Card>
@@ -681,10 +641,10 @@ export function Receivables() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-yellow-600">
-                {mockDashboard.faturasPendentes}
+                {dashboard?.faturasPendentes || 0}
               </div>
               <p className="text-xs text-muted-foreground">
-                {formatCurrency(mockDashboard.valorPendente)}
+                {formatCurrency(dashboard?.valorPendente || 0)}
               </p>
             </CardContent>
           </Card>
@@ -698,7 +658,7 @@ export function Receivables() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-orange-600">
-                {mockDashboard.faturasProximoVencimento}
+                {dashboard?.faturasProximoVencimento || 0}
               </div>
               <p className="text-xs text-muted-foreground">3 dias ou menos</p>
             </CardContent>
@@ -711,10 +671,10 @@ export function Receivables() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-red-600">
-                {mockDashboard.faturasVencidas}
+                {dashboard?.faturasVencidas || 0}
               </div>
               <p className="text-xs text-muted-foreground">
-                {formatCurrency(mockDashboard.valorVencido)}
+                {formatCurrency(dashboard?.valorVencido || 0)}
               </p>
             </CardContent>
           </Card>

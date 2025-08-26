@@ -44,158 +44,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import { MoreHorizontal, Eye, Edit, Trash2 } from 'lucide-react';
-
-// Mock data - in real app would come from API
-const mockTasks: Task[] = [
-  {
-    id: '1',
-    title: 'Revisar contrato de prestação de serviços',
-    description: 'Analisar cláusulas contratuais e identificar possíveis riscos jurídicos para o cliente.',
-    startDate: '2024-01-20T00:00:00Z',
-    endDate: '2024-01-25T00:00:00Z',
-    status: 'in_progress',
-    priority: 'high',
-    assignedTo: 'Dr. Silva',
-    projectId: '1',
-    projectTitle: 'Ação Previdenciária - João Santos',
-    clientId: '1',
-    clientName: 'João Santos',
-    tags: ['Contrato', 'Revisão', 'Urgente'],
-    estimatedHours: 4,
-    actualHours: 2.5,
-    progress: 60,
-    createdAt: '2024-01-20T09:00:00Z',
-    updatedAt: '2024-01-22T14:30:00Z',
-    notes: 'Cliente solicitou urgência devido a prazo de assinatura.',
-    attachments: [],
-    subtasks: [
-      {
-        id: '1',
-        title: 'Ler contrato completo',
-        completed: true,
-        createdAt: '2024-01-20T09:00:00Z',
-        completedAt: '2024-01-21T10:30:00Z',
-      },
-      {
-        id: '2',
-        title: 'Identificar cláusulas problemáticas',
-        completed: true,
-        createdAt: '2024-01-20T09:00:00Z',
-        completedAt: '2024-01-22T11:15:00Z',
-      },
-      {
-        id: '3',
-        title: 'Elaborar parecer jurídico',
-        completed: false,
-        createdAt: '2024-01-20T09:00:00Z',
-      },
-      {
-        id: '4',
-        title: 'Enviar relatório ao cliente',
-        completed: false,
-        createdAt: '2024-01-20T09:00:00Z',
-      },
-    ],
-  },
-  {
-    id: '2',
-    title: 'Preparar petição inicial',
-    description: 'Elaborar petição inicial para ação de divórcio consensual.',
-    startDate: '2024-01-18T00:00:00Z',
-    endDate: '2024-01-30T00:00:00Z',
-    status: 'not_started',
-    priority: 'medium',
-    assignedTo: 'Dra. Costa',
-    projectId: '2',
-    projectTitle: 'Divórcio Consensual - Maria e Carlos',
-    clientId: '2',
-    clientName: 'Maria Silva',
-    tags: ['Petição', 'Divórcio', 'Família'],
-    estimatedHours: 6,
-    actualHours: 0,
-    progress: 0,
-    createdAt: '2024-01-18T10:15:00Z',
-    updatedAt: '2024-01-18T10:15:00Z',
-    notes: 'Aguardando documentos do cliente.',
-    attachments: [],
-    subtasks: [
-      {
-        id: '5',
-        title: 'Coletar documentos necessários',
-        completed: false,
-        createdAt: '2024-01-18T10:15:00Z',
-      },
-      {
-        id: '6',
-        title: 'Redigir petição',
-        completed: false,
-        createdAt: '2024-01-18T10:15:00Z',
-      },
-    ],
-  },
-  {
-    id: '3',
-    title: 'Acompanhar audiência no INSS',
-    description: 'Comparecer à audiência administrativa no INSS para defesa do cliente.',
-    startDate: '2024-01-15T00:00:00Z',
-    endDate: '2024-01-28T00:00:00Z',
-    status: 'completed',
-    priority: 'urgent',
-    assignedTo: 'Dr. Silva',
-    projectId: '1',
-    projectTitle: 'Ação Previdenciária - João Santos',
-    clientId: '1',
-    clientName: 'João Santos',
-    tags: ['INSS', 'Audiência', 'Previdenciário'],
-    estimatedHours: 3,
-    actualHours: 3.5,
-    progress: 100,
-    createdAt: '2024-01-15T08:00:00Z',
-    updatedAt: '2024-01-28T16:45:00Z',
-    completedAt: '2024-01-28T16:45:00Z',
-    notes: 'Audiência realizada com sucesso. Aguardando decisão.',
-    attachments: [],
-    subtasks: [
-      {
-        id: '7',
-        title: 'Preparar documentação',
-        completed: true,
-        createdAt: '2024-01-15T08:00:00Z',
-        completedAt: '2024-01-20T09:30:00Z',
-      },
-      {
-        id: '8',
-        title: 'Comparecer à audiência',
-        completed: true,
-        createdAt: '2024-01-15T08:00:00Z',
-        completedAt: '2024-01-28T16:45:00Z',
-      },
-    ],
-  },
-  {
-    id: '4',
-    title: 'Análise de viabilidade processual',
-    description: 'Estudar caso e avaliar chances de sucesso na ação judicial.',
-    startDate: '2024-01-25T00:00:00Z',
-    endDate: '2024-02-05T00:00:00Z',
-    status: 'on_hold',
-    priority: 'low',
-    assignedTo: 'Ana Paralegal',
-    projectId: '4',
-    projectTitle: 'Ação Trabalhista - Pedro Souza',
-    clientId: '4',
-    clientName: 'Pedro Souza',
-    tags: ['Análise', 'Trabalhista', 'Viabilidade'],
-    estimatedHours: 8,
-    actualHours: 1,
-    progress: 15,
-    createdAt: '2024-01-25T11:20:00Z',
-    updatedAt: '2024-01-26T14:10:00Z',
-    notes: 'Pausado até recebimento de documentos adicionais.',
-    attachments: [],
-    subtasks: [],
-  },
-];
+import { useTasks } from '@/hooks/useData';
 
 interface TasksListViewProps {
   tasks: Task[];
@@ -338,7 +187,22 @@ export function Tasks() {
   const [showTaskView, setShowTaskView] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | undefined>();
   const [viewingTask, setViewingTask] = useState<Task | null>(null);
-  const [tasks, setTasks] = useState<Task[]>(mockTasks);
+  
+  // Replace mock data with real API calls
+  const { 
+    tasks, 
+    loading: tasksLoading, 
+    error: tasksError,
+    createTask,
+    updateTask,
+    deleteTask 
+  } = useTasks({ 
+    search: searchTerm,
+    status: statusFilter === 'all' ? undefined : statusFilter,
+    priority: priorityFilter === 'all' ? undefined : priorityFilter,
+    assigned_to: assigneeFilter === 'all' ? undefined : assigneeFilter
+  });
+  
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
@@ -392,66 +256,29 @@ export function Tasks() {
     },
   ];
 
-  const handleSubmitTask = (data: any) => {
-    if (editingTask) {
-      setTasks(tasks.map(task =>
-        task.id === editingTask.id
-          ? {
-              ...task,
-              ...data,
-              startDate: data.startDate + 'T00:00:00Z',
-              endDate: data.endDate + 'T00:00:00Z',
-              updatedAt: new Date().toISOString(),
-              attachments: task.attachments, // Keep existing attachments
-            }
-          : task
-      ));
-      setEditingTask(undefined);
-    } else {
-      const newTask: Task = {
-        ...data,
-        id: Date.now().toString(),
-        startDate: data.startDate + 'T00:00:00Z',
-        endDate: data.endDate + 'T00:00:00Z',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        attachments: [],
-        clientName: data.projectId ? 'Cliente do Projeto' : undefined,
-        projectTitle: data.projectId ? 'Projeto Relacionado' : undefined,
-      };
-      setTasks([...tasks, newTask]);
-
-      // NOVIDADE: Enviar notificação quando nova tarefa for criada
-      // Em produção, isso seria uma chamada para API de notificações
-      console.log("📢 NOTIFICAÇÃO ENVIADA: Nova tarefa criada", {
-        type: 'info',
-        title: 'Nova Tarefa Criada',
-        message: `${newTask.title} foi atribuída${newTask.assignedTo ? ` a ${newTask.assignedTo}` : ''}`,
-        category: 'task',
-        createdBy: 'Usuário Atual', // Em produção: pegar do contexto de auth
-        taskData: {
-          id: newTask.id,
-          title: newTask.title,
-          assignedTo: newTask.assignedTo,
-          priority: newTask.priority,
-          endDate: newTask.endDate,
-          projectTitle: newTask.projectTitle,
-          tags: newTask.tags
-        }
-      });
-
-      // FUTURO: Integração com sistema de notificações
-      // await NotificationService.create({
-      //   type: 'task_created',
-      //   title: 'Nova Tarefa Criada',
-      //   message: `${newTask.title} foi${newTask.assignedTo ? ` atribuída a ${newTask.assignedTo}` : ' criada'}`,
-      //   entityId: newTask.id,
-      //   entityType: 'task',
-      //   userId: currentUser.id,
-      //   assignedUserId: newTask.assignedTo ? getUserIdByName(newTask.assignedTo) : null
-      // });
+  const handleSubmitTask = async (data: any) => {
+    try {
+      if (editingTask) {
+        await updateTask(editingTask.id, {
+          ...data,
+          start_date: data.startDate,
+          end_date: data.endDate
+        });
+        setEditingTask(undefined);
+      } else {
+        await createTask({
+          ...data,
+          start_date: data.startDate,
+          end_date: data.endDate,
+          project_id: data.projectId === 'none' ? null : data.projectId,
+          client_id: data.clientId === 'none' ? null : data.clientId
+        });
+      }
+      setShowTaskForm(false);
+    } catch (error) {
+      console.error('Erro ao salvar tarefa:', error);
+      alert('Erro ao salvar tarefa. Tente novamente.');
     }
-    setShowTaskForm(false);
   };
 
   const handleAddTask = (status: TaskStatus) => {
@@ -464,8 +291,13 @@ export function Tasks() {
     setShowTaskForm(true);
   };
 
-  const handleDeleteTask = (taskId: string) => {
-    setTasks(tasks.filter(task => task.id !== taskId));
+  const handleDeleteTask = async (taskId: string) => {
+    try {
+      await deleteTask(taskId);
+    } catch (error) {
+      console.error('Erro ao excluir tarefa:', error);
+      alert('Erro ao excluir tarefa. Tente novamente.');
+    }
   };
 
   const handleMoveTask = (taskId: string, newStatus: TaskStatus) => {
@@ -512,6 +344,37 @@ export function Tasks() {
         : task
     ));
   };
+
+  // Loading state
+  if (tasksLoading) {
+    return (
+      <DashboardLayout>
+        <div className="space-y-6 p-6">
+          <div className="animate-pulse">
+            <div className="h-8 bg-gray-200 rounded w-1/4 mb-4"></div>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              {[1, 2, 3, 4].map(i => (
+                <div key={i} className="h-32 bg-gray-200 rounded"></div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (tasksError) {
+    return (
+      <DashboardLayout>
+        <div className="space-y-6 p-6">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-red-600">Erro ao carregar tarefas</h1>
+            <p className="text-muted-foreground">Tente recarregar a página</p>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   // Calculate task statistics
   const taskStats: TaskStats = useMemo(() => {

@@ -42,77 +42,8 @@ import {
 } from "lucide-react";
 import { Publication, PublicationStatus } from "@/types/publications";
 import { ProcessViewDialog } from "@/components/Publications/ProcessViewDialog";
-
-/**
- * DADOS MOCK - SERÃO SUBSTITUÍDOS POR API
- * ======================================
- *
- * IMPORTANTE PARA O BACKEND:
- *
- * ENDPOINT NECESSÁRIO: GET /api/publicacoes/carregar
- * - Busca novas publicações dos diários oficiais
- * - Retorna: Data Publicação, Processo, Diário, Vara/Comarca, Nome Pesquisado
- * - Todas as novas publicações devem vir com status: 'nova'
- * - Implementar filtros por data, comarca, etc.
- *
- * ENDPOINT: PATCH /api/publicacoes/{id}/status
- * - Atualiza status da publicação
- * - Usado para mudança automática NOVA -> PENDENTE ao visualizar
- */
-const mockPublications: Publication[] = [
-  {
-    id: "1",
-    dataPublicacao: new Date("2024-01-15"),
-    processo: "1001234-56.2024.8.26.0100",
-    diario: "Diário de Justiça Eletrônico",
-    varaComarca: "1ª Vara Cível - São Paulo/SP",
-    nomePesquisado: "João Silva Santos",
-    status: "nova", // Status inicial de publicações da API
-    conteudo: "Intimação para audiência de conciliação...",
-    urgencia: "alta",
-  },
-  {
-    id: "2",
-    dataPublicacao: new Date("2024-01-14"),
-    processo: "2001234-56.2024.8.26.0200",
-    diario: "Diário Oficial do Estado",
-    varaComarca: "2ª Vara Criminal - Rio de Janeiro/RJ",
-    nomePesquisado: "Maria Oliveira Costa",
-    status: "pendente", // Já foi visualizada
-    conteudo: "Sentença publicada nos autos...",
-    urgencia: "media",
-  },
-  {
-    id: "3",
-    dataPublicacao: new Date("2024-01-13"),
-    processo: "3001234-56.2024.8.26.0300",
-    diario: "Diário de Justiça Eletrônico",
-    varaComarca: "Vara de Família - Brasília/DF",
-    nomePesquisado: "Carlos Eduardo Lima",
-    status: "descartada",
-    conteudo: "Publicação não relacionada ao caso...",
-    urgencia: "baixa",
-  },
-  {
-    id: "4",
-    dataPublicacao: new Date("2024-01-12"),
-    processo: "4001234-56.2024.8.26.0400",
-    diario: "Diário de Justiça Eletrônico",
-    varaComarca: "3ª Vara Trabalhista - São Paulo/SP",
-    nomePesquisado: "Ana Paula Silva",
-    status: "atribuida",
-    conteudo: "Despacho do juiz...",
-    responsavel: "Dr. Silva",
-    urgencia: "alta",
-    atribuidoPara: {
-      id: "1",
-      nome: "Dr. Silva",
-      email: "silva@escritorio.com",
-      cargo: "Gerente",
-      ativo: true,
-    },
-  },
-];
+import { usePublications } from '@/hooks/useData';
+import { apiService } from '@/services/api';
 
 const getStatusBadge = (status: PublicationStatus) => {
   const statusConfig = {
@@ -168,6 +99,19 @@ export function Publications() {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
+  // Real API data instead of mock data
+  const { 
+    publications, 
+    loading: publicationsLoading, 
+    error: publicationsError,
+    createPublication,
+    updatePublicationStatus,
+    deletePublication 
+  } = usePublications({ 
+    search: searchTerm,
+    status: statusFilter === 'all' ? undefined : statusFilter
+  });
+
   // Estados para consulta de projetos
   const [oabNumber, setOabNumber] = useState("");
   const [oabState, setOabState] = useState("");
@@ -178,13 +122,17 @@ export function Publications() {
   const [showProcessDialog, setShowProcessDialog] = useState(false);
   const [viewingProcess, setViewingProcess] = useState<any>(null);
 
-  const handleViewPublication = (publication: Publication) => {
+  const handleViewPublication = async (publication: Publication) => {
     // BACKEND: Implementar mudança automática de status NOVA -> PENDENTE
     if (publication.status === "nova") {
-      // Fazer PATCH /api/publicacoes/{id}/status para mudar para 'pendente'
-      console.log(
-        `Mudando status da publicação ${publication.id} de NOVA para PENDENTE`,
-      );
+      try {
+        await updatePublicationStatus(publication.id, 'pendente');
+        console.log(
+          `Status da publicação ${publication.id} alterado de NOVA para PENDENTE`,
+        );
+      } catch (error) {
+        console.error('Erro ao atualizar status:', error);
+      }
     }
     navigate(`/publicacoes/${publication.id}`);
   };
@@ -192,19 +140,18 @@ export function Publications() {
   const handleLoadPublications = async () => {
     setIsLoading(true);
     try {
-      // BACKEND: Implementar chamada para API
-      // const response = await fetch('/api/publicacoes/carregar');
-      // const newPublications = await response.json();
+      // Simular carregamento de novas publicações
+      await apiService.getPublications();
 
       console.log("Carregando novas publicações da API...");
 
       // Simular carregamento
       await new Promise((resolve) => setTimeout(resolve, 2000));
 
-      // TODO: Atualizar estado com novas publicações
       console.log("Publicações carregadas com sucesso!");
     } catch (error) {
       console.error("Erro ao carregar publicações:", error);
+      alert("Erro ao carregar publicações. Tente novamente.");
     } finally {
       setIsLoading(false);
     }
@@ -253,7 +200,7 @@ export function Publications() {
     }
   };
 
-  const filteredPublications = mockPublications.filter((pub) => {
+  const filteredPublications = (publications || []).filter((pub) => {
     const matchesSearch =
       pub.processo.toLowerCase().includes(searchTerm.toLowerCase()) ||
       pub.nomePesquisado.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -434,6 +381,33 @@ export function Publications() {
   React.useEffect(() => {
     setArchivedProjects(mockArchivedProjects);
   }, []);
+
+  // Loading state
+  if (publicationsLoading) {
+    return (
+      <DashboardLayout>
+        <div className="container mx-auto p-6 space-y-6">
+          <div className="animate-pulse">
+            <div className="h-8 bg-gray-200 rounded w-1/4 mb-4"></div>
+            <div className="h-64 bg-gray-200 rounded"></div>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (publicationsError) {
+    return (
+      <DashboardLayout>
+        <div className="container mx-auto p-6 space-y-6">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-red-600">Erro ao carregar publicações</h1>
+            <p className="text-muted-foreground">Tente recarregar a página</p>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
@@ -713,309 +687,4 @@ export function Publications() {
                     </div>
                   </div>
 
-                  {/* Informações sobre a consulta */}
-                  <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
-                    <div className="flex items-start space-x-3">
-                      <Scale className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
-                      <div className="text-sm text-blue-800 dark:text-blue-200">
-                        <p className="font-medium mb-1">
-                          Como funciona a consulta:
-                        </p>
-                        <ul className="space-y-1 text-xs">
-                          <li>
-                            • Digite o número da OAB e o estado do advogado
-                          </li>
-                          <li>
-                            • O sistema buscará todos os projetos onde este
-                            advogado está atuando
-                          </li>
-                          <li>
-                            • Serão exibidos apenas projetos com status ativo
-                          </li>
-                          <li>
-                            • Clique em qualquer projeto para ver os detalhes
-                            completos
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Resultados da Consulta */}
-                {isSearching && (
-                  <div className="flex items-center justify-center py-8">
-                    <div className="text-center space-y-2">
-                      <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full mx-auto"></div>
-                      <p className="text-sm text-muted-foreground">
-                        Consultando projetos...
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {searchResults.length > 0 && !isSearching && (
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-lg font-semibold">
-                        Projetos Encontrados ({searchResults.length})
-                      </h3>
-                      <Badge
-                        variant="outline"
-                        className="text-green-600 border-green-600"
-                      >
-                        Consulta realizada com sucesso
-                      </Badge>
-                    </div>
-
-                    {/* Layout de Cards lado a lado */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {searchResults.map((project) => (
-                        <div
-                          key={project.id}
-                          className="border rounded-lg p-4 hover:shadow-md transition-shadow bg-white dark:bg-card"
-                        >
-                          {/* Header do Card */}
-                          <div className="flex items-center justify-between mb-3">
-                            <span className="text-xs text-muted-foreground font-medium">
-                              DATA DO PROJETO
-                            </span>
-                            <div className="flex space-x-1">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 w-6 p-0 text-gray-500 hover:text-gray-700"
-                                onClick={() => handleArchiveProcess(project)}
-                                title="Arquivar"
-                              >
-                                📁
-                              </Button>
-                            </div>
-                          </div>
-
-                          {/* Data */}
-                          <div className="text-lg font-semibold mb-2">
-                            {project.dataUltimaMovimentacao?.toLocaleDateString(
-                              "pt-BR",
-                            ) || "21/08/2025"}
-                          </div>
-
-                          {/* Cliente */}
-                          <div className="mb-3">
-                            <span className="text-xs text-muted-foreground font-medium">
-                              CLIENTE
-                            </span>
-                            <div className="font-medium text-sm mt-1">
-                              <span className="text-blue-600">
-                                {project.cliente}
-                              </span>
-                            </div>
-                            <div className="text-xs text-green-600 font-medium mt-1">
-                              VISUALIZAR PROJETO
-                            </div>
-                          </div>
-
-                          {/* Informações Adicionais */}
-                          <div className="mt-3 pt-3 border-t space-y-2">
-                            <div className="text-xs text-muted-foreground">
-                              <strong>Número:</strong> {project.numero}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              <strong>Status:</strong>
-                              <Badge
-                                className={`ml-1 ${getProcessStatusColor(project.status)} text-xs`}
-                              >
-                                {project.status}
-                              </Badge>
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              <strong>Vara:</strong> {project.vara}
-                            </div>
-
-                            {/* Botão Abrir Projeto */}
-                            <div className="mt-3 pt-2">
-                              <Button
-                                size="sm"
-                                className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-                                onClick={() =>
-                                  handleViewProcessDetails(project)
-                                }
-                              >
-                                Abrir Projeto
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {hasSearched && searchResults.length === 0 && !isSearching && (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <div className="space-y-2">
-                      <FileSearch className="h-12 w-12 mx-auto opacity-50" />
-                      <p className="font-medium">Nenhum projeto encontrado</p>
-                      <p className="text-sm">
-                        Não foram encontrados projetos para a OAB {oabNumber}/
-                        {oabState}
-                      </p>
-                      <p className="text-xs">
-                        Verifique se o número da OAB está correto e tente
-                        novamente
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* ABA PROJETOS ARQUIVADOS */}
-          <TabsContent value="arquivados" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <Building2 className="h-5 w-5" />
-                  <span>Projetos Arquivados</span>
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  Projetos que foram finalizados e arquivados
-                </p>
-              </CardHeader>
-              <CardContent>
-                {archivedProjects.length > 0 ? (
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-lg font-semibold">
-                        Projetos Arquivados ({archivedProjects.length})
-                      </h3>
-                      <Badge
-                        variant="outline"
-                        className="text-gray-600 border-gray-600"
-                      >
-                        📁 Arquivados
-                      </Badge>
-                    </div>
-
-                    {/* Layout de Cards lado a lado */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {archivedProjects.map((project) => (
-                        <div
-                          key={project.id}
-                          className="border rounded-lg p-4 hover:shadow-md transition-shadow bg-gray-50 dark:bg-gray-800"
-                        >
-                          {/* Header do Card */}
-                          <div className="flex items-center justify-between mb-3">
-                            <span className="text-xs text-muted-foreground font-medium">
-                              DATA DO PROJETO
-                            </span>
-                            <div className="flex space-x-1">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 w-6 p-0 text-green-600 hover:text-green-700"
-                                onClick={() => handleRestoreProject(project)}
-                                title="Restaurar Projeto"
-                              >
-                                ↩️
-                              </Button>
-                            </div>
-                          </div>
-
-                          {/* Data */}
-                          <div className="text-lg font-semibold mb-2">
-                            {project.dataUltimaMovimentacao?.toLocaleDateString(
-                              "pt-BR",
-                            ) || "21/08/2025"}
-                          </div>
-
-                          {/* Cliente */}
-                          <div className="mb-3">
-                            <span className="text-xs text-muted-foreground font-medium">
-                              CLIENTE
-                            </span>
-                            <div className="font-medium text-sm mt-1">
-                              <span className="text-blue-600">
-                                {project.cliente}
-                              </span>
-                            </div>
-                            <div className="text-xs text-green-600 font-medium mt-1">
-                              VISUALIZAR PROJETO
-                            </div>
-                          </div>
-
-                          {/* Status de Arquivado */}
-                          <div className="mb-3">
-                            <Badge className="bg-gray-100 text-gray-800 border-gray-200 text-xs">
-                              📁 Arquivado
-                            </Badge>
-                          </div>
-
-                          {/* Informações Adicionais */}
-                          <div className="mt-3 pt-3 border-t space-y-2">
-                            <div className="text-xs text-muted-foreground">
-                              <strong>Número:</strong> {project.numero}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              <strong>Tipo:</strong> {project.tipo}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              <strong>Valor:</strong> {project.valor}
-                            </div>
-                            {project.dataArquivamento && (
-                              <div className="text-xs text-muted-foreground">
-                                <strong>Arquivado em:</strong>{" "}
-                                {project.dataArquivamento.toLocaleDateString(
-                                  "pt-BR",
-                                )}
-                              </div>
-                            )}
-
-                            {/* Botão Abrir Projeto */}
-                            <div className="mt-3 pt-2">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="w-full"
-                                onClick={() =>
-                                  handleViewProcessDetails(project)
-                                }
-                              >
-                                Visualizar Projeto
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <div className="space-y-2">
-                      <Building2 className="h-12 w-12 mx-auto opacity-50" />
-                      <p className="font-medium">Nenhum projeto arquivado</p>
-                      <p className="text-sm">
-                        Os projetos arquivados aparecerão aqui
-                      </p>
-                      <p className="text-xs">
-                        Arquive projetos finalizados para manter a organização
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
-
-        {/* Modal de Visualização de Processo */}
-        <ProcessViewDialog
-          process={viewingProcess}
-          open={showProcessDialog}
-          onOpenChange={setShowProcessDialog}
-        />
-      </div>
-    </DashboardLayout>
-  );
-}
+                  {/* Inform

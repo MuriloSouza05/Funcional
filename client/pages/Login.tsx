@@ -10,6 +10,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Scale, Eye, EyeOff, Mail, Lock, User, Building } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
+import { useNavigate } from 'react-router-dom';
 
 const loginSchema = z.object({
   email: z.string().email('Email inválido'),
@@ -37,6 +39,8 @@ type RegisterFormData = z.infer<typeof registerSchema>;
 type ForgotPasswordFormData = z.infer<typeof forgotPasswordSchema>;
 
 export function Login() {
+  const { login } = useAuth();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('login');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -75,23 +79,18 @@ export function Login() {
     setIsLoading(true);
     setErrorMessage('');
     
+    setErrorMessage('');
+    
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      await login(data.email, data.password);
+      setSuccessMessage('Login realizado com sucesso! Redirecionando...');
       
-      // Mock authentication
-      if (data.email === 'admin@escritorio.com' && data.password === '123456') {
-        setSuccessMessage('Login realizado com sucesso! Redirecionando...');
-        
-        // Simulate redirect to dashboard
-        setTimeout(() => {
-          window.location.href = '/';
-        }, 1000);
-      } else {
-        setErrorMessage('Email ou senha incorretos');
-      }
+      setTimeout(() => {
+        navigate('/');
+      }, 1000);
     } catch (error) {
-      setErrorMessage('Erro ao fazer login. Tente novamente.');
+      console.error('Login error:', error);
+      setErrorMessage('Email ou senha incorretos');
     } finally {
       setIsLoading(false);
     }
@@ -250,6 +249,7 @@ export function Login() {
                     <p className="text-sm text-blue-800 font-medium mb-1">Credenciais de demonstração:</p>
                     <p className="text-xs text-blue-700">Email: admin@escritorio.com</p>
                     <p className="text-xs text-blue-700">Senha: 123456</p>
+                    <p className="text-xs text-blue-700 mt-2">Ou use: financeiro@escritorio.com / atendimento@escritorio.com</p>
                   </div>
                 </form>
               </TabsContent>

@@ -53,78 +53,8 @@ import {
 import { cn } from '@/lib/utils';
 import { DashboardCharts } from '@/components/Dashboard/Charts';
 import { useNavigate } from 'react-router-dom';
+import { useDashboard } from '@/hooks/useData';
 
-// Mock data - would come from API in real app
-const metrics = {
-  revenue: {
-    value: 45280.00,
-    change: 15,
-    trend: 'up' as const,
-  },
-  expenses: {
-    value: 12340.00,
-    change: -8,
-    trend: 'down' as const,
-  },
-  balance: {
-    value: 32940.00,
-    change: 23,
-    trend: 'up' as const,
-  },
-  clients: {
-    value: 127,
-    change: 12,
-    trend: 'up' as const,
-    period: 'este mês',
-  },
-};
-
-const recentActivities = [
-  {
-    id: 1,
-    type: 'client',
-    message: 'Novo cliente adicionado: Maria Silva',
-    time: '2 horas atrás',
-    icon: Users,
-    color: 'text-blue-600',
-  },
-  {
-    id: 2,
-    type: 'invoice',
-    message: 'Fatura INV-001 vencendo em 3 dias',
-    time: '4 horas atrás',
-    icon: AlertCircle,
-    color: 'text-yellow-600',
-  },
-  {
-    id: 3,
-    type: 'project',
-    message: 'Projeto "Ação Trabalhista" atualizado',
-    time: '6 horas atrás',
-    icon: FileText,
-    color: 'text-green-600',
-  },
-  {
-    id: 4,
-    type: 'task',
-    message: 'Tarefa "Revisar contrato" completada',
-    time: '1 dia atrás',
-    icon: Clock,
-    color: 'text-purple-600',
-  },
-];
-
-const urgentProjects = [
-  { name: 'Ação Previdenciária - João Santos', deadline: '2024-01-15', status: 'Em Andamento' },
-  { name: 'Divórcio Consensual - Ana Costa', deadline: '2024-01-18', status: 'Revisão' },
-  { name: 'Recuperação Judicial - Tech LTDA', deadline: '2024-01-20', status: 'Aguardando Cliente' },
-];
-
-const upcomingInvoices = [
-  { number: 'INV-001', client: 'Maria Silva', amount: 2500.00, dueDate: '2024-01-15' },
-  { number: 'INV-002', client: 'João Santos', amount: 4800.00, dueDate: '2024-01-16' },
-  { number: 'INV-003', client: 'Tech LTDA', amount: 12000.00, dueDate: '2024-01-18' },
-];
 
 function MetricCard({ 
   title, 
@@ -174,6 +104,43 @@ function MetricCard({
 
 export function Dashboard() {
   const navigate = useNavigate();
+  const { dashboard, loading, error } = useDashboard();
+
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="space-y-6 p-6">
+          <div className="animate-pulse">
+            <div className="h-8 bg-gray-200 rounded w-1/4 mb-4"></div>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              {[1, 2, 3, 4].map(i => (
+                <div key={i} className="h-32 bg-gray-200 rounded"></div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (error) {
+    return (
+      <DashboardLayout>
+        <div className="space-y-6 p-6">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-red-600">Erro ao carregar dashboard</h1>
+            <p className="text-muted-foreground">Tente recarregar a página</p>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (!dashboard) {
+    return null;
+  }
+
+  const metrics = dashboard;
 
   const handleViewAllNotifications = () => {
     // Redirect to notifications page instead of showing notification
@@ -322,7 +289,7 @@ export function Dashboard() {
               </Button>
             </CardHeader>
             <CardContent className="space-y-4">
-              {recentActivities.map((activity) => (
+              {(dashboard.recentActivities || []).map((activity) => (
                 <div key={activity.id} className="flex items-start space-x-3">
                   <activity.icon className={cn("h-4 w-4 mt-1", activity.color)} />
                   <div className="flex-1 space-y-1">
@@ -352,7 +319,7 @@ export function Dashboard() {
               </Button>
             </CardHeader>
             <CardContent className="space-y-4">
-              {urgentProjects.map((project, index) => (
+              {(dashboard.urgentProjects || []).map((project, index) => (
                 <div key={index} className="flex flex-col space-y-2 p-3 border rounded-lg">
                   <h4 className="text-sm font-medium">{project.name}</h4>
                   <div className="flex items-center justify-between text-xs">
@@ -383,7 +350,7 @@ export function Dashboard() {
               </Button>
             </CardHeader>
             <CardContent className="space-y-4">
-              {upcomingInvoices.map((invoice, index) => (
+              {(dashboard.upcomingInvoices || []).map((invoice, index) => (
                 <div key={index} className="flex flex-col space-y-2 p-3 border rounded-lg">
                   <div className="flex items-center justify-between">
                     <h4 className="text-sm font-medium">{invoice.number}</h4>

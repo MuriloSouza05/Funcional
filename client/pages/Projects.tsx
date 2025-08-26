@@ -45,6 +45,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import { MoreHorizontal, Eye, Edit, Trash2 } from 'lucide-react';
+import { useProjects } from '@/hooks/useData';
 
 // Mock data - in real app would come from API
 const mockProjects: Project[] = [
@@ -142,41 +143,6 @@ const mockProjects: Project[] = [
     assignedTo: ['Dr. Oliveira', 'Dr. Silva', 'Ana Paralegal'],
     priority: 'urgent',
     progress: 40,
-    createdAt: '2024-01-12T14:20:00Z',
-    updatedAt: '2024-01-25T16:10:00Z',
-    notes: 'Empresa em situação crítica. Prioridade máxima.',
-    attachments: []
-  },
-  {
-    id: '4',
-    title: 'Ação Trabalhista - Pedro Souza',
-    description: 'Ação contra ex-empregador por horas extras não pagas e verbas rescisórias.',
-    clientName: 'Pedro Souza',
-    contacts: [
-      {
-        id: '5',
-        name: 'Pedro Souza',
-        email: 'pedro@email.com',
-        phone: '(11) 55555-7777',
-        role: 'Cliente'
-      }
-    ],
-    address: 'Rua do Trabalho, 789, São Paulo - SP',
-    budget: 15000,
-    currency: 'BRL',
-    status: 'contacted',
-    startDate: '2024-01-25T00:00:00Z',
-    dueDate: '2024-05-15T00:00:00Z',
-    tags: ['Trabalhista', 'Horas Extras'],
-    assignedTo: ['Dra. Trabalho'],
-    priority: 'medium',
-    progress: 10,
-    createdAt: '2024-01-25T08:30:00Z',
-    updatedAt: '2024-01-25T08:30:00Z',
-    notes: 'Início da coleta de documentos.',
-    attachments: []
-  }
-];
 
 interface ProjectCompactViewProps {
   projects: Project[];
@@ -300,7 +266,21 @@ export function Projects() {
   const [showProjectView, setShowProjectView] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | undefined>();
   const [viewingProject, setViewingProject] = useState<Project | null>(null);
-  const [projects, setProjects] = useState<Project[]>(mockProjects);
+  
+  // Replace mock data with real API calls
+  const { 
+    projects, 
+    loading: projectsLoading, 
+    error: projectsError,
+    createProject,
+    updateProject,
+    deleteProject 
+  } = useProjects({ 
+    search: searchTerm, 
+    status: statusFilter === 'all' ? undefined : statusFilter,
+    priority: priorityFilter === 'all' ? undefined : priorityFilter
+  });
+  
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
@@ -346,7 +326,8 @@ export function Projects() {
     },
   ];
 
-  const handleSubmitProject = (data: any) => {
+  const handleSubmitProject = async (data: any) => {
+    try {
     if (editingProject) {
       setProjects(projects.map(project =>
         project.id === editingProject.id
@@ -359,38 +340,39 @@ export function Projects() {
               assignedTo: project.assignedTo, // Keep existing assignments
               attachments: project.attachments, // Keep existing attachments
             }
-          : project
-      ));
-      setEditingProject(undefined);
-    } else {
-      const newProject: Project = {
-        ...data,
-        id: Date.now().toString(),
-        startDate: data.startDate + 'T00:00:00Z',
-        dueDate: data.dueDate + 'T00:00:00Z',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        assignedTo: ['Dr. Silva'], // Default assignment
-        attachments: [],
+        await updateProject(editingProject.id, {
+          ...data,
+          start_date: data.startDate,
+          due_date: data.dueDate,
+          client_name: data.clientName,
+          assigned_to: data.assignedTo,
+          created_by: data.createdBy
+        });
       };
       setProjects([...projects, newProject]);
-    }
+        await createProject({
     setShowProjectForm(false);
-  };
-
-  const handleAddProject = (status: ProjectStatus) => {
-    setEditingProject(undefined);
-    setShowProjectForm(true);
-    // You could set default status here if needed
-  };
-
-  const handleEditProject = (project: Project) => {
+          start_date: data.startDate,
+          due_date: data.dueDate,
+          client_name: data.clientName,
+          assigned_to: data.assignedTo || ['Dr. Silva'],
+          created_by: data.createdBy
+        });
     setEditingProject(project);
     setShowProjectForm(true);
+    } catch (error) {
+      console.error('Erro ao salvar projeto:', error);
+      alert('Erro ao salvar projeto. Tente novamente.');
+    }
   };
 
-  const handleDeleteProject = (projectId: string) => {
-    setProjects(projects.filter(project => project.id !== projectId));
+  const handleDeleteProject = async (projectId: string) => {
+    try {
+      await deleteProject(projectId);
+    } catch (error) {
+      console.error('Erro ao excluir projeto:', error);
+      alert('Erro ao excluir projeto. Tente novamente.');
+    }
   };
 
   const handleMoveProject = (projectId: string, newStatus: ProjectStatus) => {
@@ -413,12 +395,42 @@ export function Projects() {
   };
 
   // Calculate metrics with new CRM-style statuses
-  const totalProjects = projects.length;
+  const totalProjects = projects?.length || 0;
   const activeProjects = projects.filter(p => !['won', 'lost'].includes(p.status)).length;
   const overdueProjects = projects.filter(p => new Date(p.dueDate) < new Date() && !['won', 'lost'].includes(p.status)).length;
   const totalRevenue = projects.filter(p => p.status === 'won').reduce((sum, project) => sum + project.budget, 0);
   const avgProgress = activeProjects > 0 ? Math.round(projects.filter(p => !['won', 'lost'].includes(p.status)).reduce((sum, project) => sum + project.progress, 0) / activeProjects) : 0;
 
+  // Loading state
+  if (projectsLoading) {
+    return (
+      <DashboardLayout>
+        <div className="space-y-6 p-6">
+          <div className="animate-pulse">
+            <div className="h-8 bg-gray-200 rounded w-1/4 mb-4"></div>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              {[1, 2, 3, 4].map(i => (
+                <div key={i} className="h-32 bg-gray-200 rounded"></div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (projectsError) {
+    return (
+      <DashboardLayout>
+        <div className="space-y-6 p-6">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-red-600">Erro ao carregar projetos</h1>
+            <p className="text-muted-foreground">Tente recarregar a página</p>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
   return (
     <DashboardLayout>
       <div className="space-y-6 p-6">

@@ -11,6 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { useNotifications } from '@/hooks/useData';
 import { 
   Bell, 
   Check, 
@@ -133,13 +134,6 @@ const mockNotifications: Notification[] = [
     time: '3 horas atrás',
     read: false,
     actionable: true,
-    actionData: {
-      type: 'document',
-      id: 'DOC-123',
-      page: '/projetos'
-    }
-  },
-];
 
 /**
  * Componente NotificationsPanel
@@ -147,32 +141,51 @@ const mockNotifications: Notification[] = [
  */
 export function NotificationsPanel() {
   const navigate = useNavigate();
-  const [notifications, setNotifications] = useState<Notification[]>(mockNotifications);
-  const unreadCount = notifications.filter(n => !n.read).length;
+  
+  // Real API data instead of mock data
+  const { 
+    notifications, 
+    loading: notificationsLoading,
+    markAsRead,
+    markAllAsRead,
+    deleteNotification 
+  } = useNotifications();
+  
+  const unreadCount = (notifications || []).filter(n => !n.read).length;
 
   /**
    * Marca uma notificação como lida
    * @param id - ID da notificação
    */
-  const markAsRead = (id: string) => {
-    setNotifications(notifications.map(n => 
-      n.id === id ? { ...n, read: true } : n
-    ));
+  const handleMarkAsRead = async (id: string) => {
+    try {
+      await markAsRead(id);
+    } catch (error) {
+      console.error('Erro ao marcar como lida:', error);
+    }
   };
 
   /**
    * Marca todas as notificações como lidas
    */
-  const markAllAsRead = () => {
-    setNotifications(notifications.map(n => ({ ...n, read: true })));
+  const handleMarkAllAsRead = async () => {
+    try {
+      await markAllAsRead();
+    } catch (error) {
+      console.error('Erro ao marcar todas como lidas:', error);
+    }
   };
 
   /**
    * Remove uma notificação da lista
    * @param id - ID da notificação a ser removida
    */
-  const removeNotification = (id: string) => {
-    setNotifications(notifications.filter(n => n.id !== id));
+  const handleRemoveNotification = async (id: string) => {
+    try {
+      await deleteNotification(id);
+    } catch (error) {
+      console.error('Erro ao excluir notificação:', error);
+    }
   };
 
   /**
@@ -222,7 +235,7 @@ export function NotificationsPanel() {
       console.log('Navegando para detalhes da notificação:', notification);
 
       // Marcar como lida ao acessar detalhes
-      markAsRead(notification.id);
+      handleMarkAsRead(notification.id);
 
       // Determinar rota baseada no tipo de ação
       if (notification.actionData) {
@@ -439,7 +452,7 @@ export function NotificationsPanel() {
             <Button 
               variant="ghost" 
               size="sm" 
-              onClick={markAllAsRead}
+              onClick={handleMarkAllAsRead}
               className="h-auto p-1 text-xs"
             >
               Marcar todas como lidas
@@ -449,14 +462,19 @@ export function NotificationsPanel() {
         <DropdownMenuSeparator />
         
         <ScrollArea className="h-96">
-          {notifications.length === 0 ? (
+          {notificationsLoading ? (
+            <div className="p-4 text-center">
+              <div className="animate-spin h-6 w-6 border-2 border-primary border-t-transparent rounded-full mx-auto mb-2"></div>
+              <p className="text-sm text-muted-foreground">Carregando...</p>
+            </div>
+          ) : (notifications || []).length === 0 ? (
             <div className="p-4 text-center text-muted-foreground">
               <Bell className="h-8 w-8 mx-auto mb-2 opacity-50" />
               <p className="text-sm">Nenhuma notificação</p>
             </div>
           ) : (
             <div className="space-y-1">
-              {notifications.map((notification) => (
+              {(notifications || []).map((notification) => (
                 <div
                   key={notification.id}
                   className={`p-3 hover:bg-muted/50 cursor-pointer border-l-2 transition-all duration-200 ${
@@ -464,7 +482,7 @@ export function NotificationsPanel() {
                       ? 'border-transparent opacity-70' 
                       : 'border-blue-500 bg-blue-50/50 dark:bg-blue-950/20'
                   }`}
-                  onClick={() => !notification.read && markAsRead(notification.id)}
+                  onClick={() => !notification.read && handleMarkAsRead(notification.id)}
                 >
                   <div className="flex items-start space-x-3">
                     <div className="mt-0.5">
@@ -480,7 +498,7 @@ export function NotificationsPanel() {
                           size="sm"
                           onClick={(e) => {
                             e.stopPropagation();
-                            removeNotification(notification.id);
+                            handleRemoveNotification(notification.id);
                           }}
                           className="h-auto p-1 opacity-50 hover:opacity-100"
                         >
@@ -517,7 +535,7 @@ export function NotificationsPanel() {
           )}
         </ScrollArea>
 
-        {notifications.length > 0 && (
+        {(notifications || []).length > 0 && (
           <>
             <DropdownMenuSeparator />
             <DropdownMenuItem className="justify-center">

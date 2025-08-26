@@ -22,6 +22,7 @@ import { ProjectViewDialog } from '@/components/Projects/ProjectViewDialog';
 import { ClientViewDialog } from '@/components/CRM/ClientViewDialog';
 import { DocumentViewDialog } from '@/components/Billing/DocumentViewDialog';
 import { TaskViewDialog } from '@/components/Tasks/TaskViewDialog';
+import { useNotifications } from '@/hooks/useData';
 import {
   Select,
   SelectContent,
@@ -74,81 +75,19 @@ interface DetailedNotification {
   };
 }
 
-// DADOS MOCK EXPANDIDOS - Em produção viriam de API
-const mockNotifications: DetailedNotification[] = [
-  {
-    id: '1',
-    type: 'info',
-    title: 'Novo Cliente Cadastrado',
-    message: 'João Santos foi adicionado ao CRM',
-    time: '4 horas atrás',
-    read: false,
-    createdBy: 'Junior Santos',
-    createdAt: '2024-01-28T10:00:00Z',
-    details: 'Cliente cadastrado com dados completos. Email: joao@email.com, Telefone: (11) 99999-8888, Endereço: São Paulo - SP. Tags: Direito Trabalhista, Novo Cliente.',
-    category: 'client',
-    actionData: {
-      type: 'client',
-      id: '2',
-      page: '/crm'
-    }
-  },
-  {
-    id: '2',
-    type: 'success',
-    title: 'Projeto Finalizado',
-    message: 'Ação Previdenciária - Maria Silva foi concluída',
-    time: '6 horas atrás',
-    read: false,
-    createdBy: 'Dr. Advogado',
-    createdAt: '2024-01-28T08:00:00Z',
-    details: 'Projeto concluído com sucesso. Duração: 45 dias. Valor recebido: R$ 5.500,00. Cliente satisfeito com resultado.',
-    category: 'project',
-    actionData: {
-      type: 'project',
-      id: '3',
-      page: '/projetos'
-    }
-  },
-  {
-    id: '3',
-    type: 'warning',
-    title: 'Fatura Vencendo',
-    message: 'Fatura INV-001 vence em 2 dias - Maria Silva',
-    time: '8 horas atrás',
-    read: true,
-    createdBy: 'Sistema Automático',
-    createdAt: '2024-01-28T06:00:00Z',
-    details: 'Fatura no valor de R$ 2.500,00 com vencimento em 28/01/2024. Cliente: Maria Silva. Serviço: Consultoria Jurídica.',
-    category: 'billing',
-    actionData: {
-      type: 'invoice',
-      id: 'INV-001',
-      page: '/cobranca'
-    }
-  },
-  {
-    id: '4',
-    type: 'info',
-    title: 'Nova Tarefa Criada',
-    message: 'Revisar documentos contratuais foi atribuída a você',
-    time: '1 dia atrás',
-    read: true,
-    createdBy: 'Ana Costa',
-    createdAt: '2024-01-27T14:30:00Z',
-    details: 'Tarefa urgente para revisar contratos de prestação de serviços. Prazo: 30/01/2024. Projeto relacionado: Consultoria Empresarial.',
-    category: 'task',
-    actionData: {
-      type: 'task',
-      id: '5',
-      page: '/tarefas'
-    }
-  },
-];
-
 export function Notifications() {
   const navigate = useNavigate();
-  const [notifications, setNotifications] = useState<DetailedNotification[]>(mockNotifications);
+  
+  // Real API data instead of mock data
+  const { 
+    notifications, 
+    loading: notificationsLoading, 
+    error: notificationsError,
+    markAsRead,
+    markAllAsRead,
+    deleteNotification 
+  } = useNotifications();
+  
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
@@ -226,7 +165,7 @@ export function Notifications() {
         tax: 0,
       }
     ],
-    senderName: 'Escrit��rio Silva & Associados',
+    senderName: 'Escritório Silva & Associados',
     receiverName: 'Maria Silva',
   };
 
@@ -251,10 +190,10 @@ export function Notifications() {
   };
 
   // Filtrar notificações
-  const filteredNotifications = notifications.filter(notification => {
+  const filteredNotifications = (notifications || []).filter(notification => {
     const matchesSearch = notification.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          notification.message.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         notification.createdBy.toLowerCase().includes(searchTerm.toLowerCase());
+                         (notification.createdBy || '').toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesType = typeFilter === 'all' || notification.type === typeFilter;
     const matchesCategory = categoryFilter === 'all' || notification.category === categoryFilter;
@@ -307,28 +246,36 @@ export function Notifications() {
     });
   };
 
-  const markAsRead = (id: string) => {
-    setNotifications(prev => 
-      prev.map(notif => notif.id === id ? { ...notif, read: true } : notif)
-    );
+  const handleMarkAsRead = async (id: string) => {
+    try {
+      await markAsRead(id);
+    } catch (error) {
+      console.error('Erro ao marcar como lida:', error);
+    }
   };
 
-  const markAllAsRead = () => {
-    setNotifications(prev => 
-      prev.map(notif => ({ ...notif, read: true }))
-    );
+  const handleMarkAllAsRead = async () => {
+    try {
+      await markAllAsRead();
+    } catch (error) {
+      console.error('Erro ao marcar todas como lidas:', error);
+    }
   };
 
-  const deleteNotification = (id: string) => {
-    setNotifications(prev => prev.filter(notif => notif.id !== id));
+  const handleDeleteNotification = async (id: string) => {
+    try {
+      await deleteNotification(id);
+    } catch (error) {
+      console.error('Erro ao excluir notificação:', error);
+    }
   };
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const unreadCount = (notifications || []).filter(n => !n.read).length;
 
   // NOVIDADE: Função para abrir modal específico baseado no tipo de notificação
   // Substitui navegação por página que causava 3 segundos de tela branca
   const handleViewDetails = (notification: DetailedNotification) => {
-    markAsRead(notification.id);
+    handleMarkAsRead(notification.id);
 
     if (!notification.actionData) return;
 
@@ -356,6 +303,37 @@ export function Notifications() {
         navigate(notification.actionData.page);
     }
   };
+
+  // Loading state
+  if (notificationsLoading) {
+    return (
+      <DashboardLayout>
+        <div className="space-y-6 p-6">
+          <div className="animate-pulse">
+            <div className="h-8 bg-gray-200 rounded w-1/4 mb-4"></div>
+            <div className="space-y-4">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="h-32 bg-gray-200 rounded"></div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (notificationsError) {
+    return (
+      <DashboardLayout>
+        <div className="space-y-6 p-6">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-red-600">Erro ao carregar notificações</h1>
+            <p className="text-muted-foreground">Tente recarregar a página</p>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
@@ -390,7 +368,7 @@ export function Notifications() {
                 {unreadCount} não lidas
               </Badge>
             )}
-            <Button onClick={markAllAsRead} variant="outline">
+            <Button onClick={handleMarkAllAsRead} variant="outline">
               <CheckCircle className="h-4 w-4 mr-2" />
               Marcar todas como lidas
             </Button>
@@ -446,7 +424,7 @@ export function Notifications() {
                     <SelectItem value="all">Todas as categorias</SelectItem>
                     <SelectItem value="client">CRM</SelectItem>
                     <SelectItem value="project">Projetos</SelectItem>
-                    <SelectItem value="billing">Cobran��a</SelectItem>
+                    <SelectItem value="billing">Cobrança</SelectItem>
                     <SelectItem value="task">Tarefas</SelectItem>
                     <SelectItem value="system">Sistema</SelectItem>
                   </SelectContent>
@@ -551,89 +529,3 @@ export function Notifications() {
                         <div className="flex items-center space-x-2">
                           {notification.actionData && (
                             <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleViewDetails(notification)}
-                            >
-                              <Eye className="h-4 w-4 mr-2" />
-                              Ver Detalhes
-                            </Button>
-                          )}
-                          {!notification.read && (
-                            <Button 
-                              size="sm" 
-                              variant="ghost"
-                              onClick={() => markAsRead(notification.id)}
-                            >
-                              <CheckCircle className="h-4 w-4 mr-2" />
-                              Marcar como lida
-                            </Button>
-                          )}
-                        </div>
-                        <Button 
-                          size="sm" 
-                          variant="ghost"
-                          onClick={() => deleteNotification(notification.id)}
-                          className="text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))
-          )}
-        </div>
-
-        {/* NOVIDADE: Modais de visualização específicos para cada tipo de notificação */}
-        {/* Evita navegação de página que causava 3 segundos de tela branca */}
-
-        {/* Modal de Projeto */}
-        <ProjectViewDialog
-          open={showProjectDialog}
-          onOpenChange={setShowProjectDialog}
-          project={selectedItem}
-          onEdit={() => {
-            setShowProjectDialog(false);
-            navigate('/projetos');
-          }}
-        />
-
-        {/* Modal de Cliente */}
-        <ClientViewDialog
-          open={showClientDialog}
-          onOpenChange={setShowClientDialog}
-          client={selectedItem}
-          onEdit={() => {
-            setShowClientDialog(false);
-            navigate('/crm');
-          }}
-        />
-
-        {/* Modal de Documento/Fatura */}
-        <DocumentViewDialog
-          open={showDocumentDialog}
-          onOpenChange={setShowDocumentDialog}
-          document={selectedItem}
-          onEdit={() => {
-            setShowDocumentDialog(false);
-            navigate('/cobranca');
-          }}
-        />
-
-        {/* Modal de Tarefa */}
-        <TaskViewDialog
-          open={showTaskDialog}
-          onOpenChange={setShowTaskDialog}
-          task={selectedItem}
-          onEdit={() => {
-            setShowTaskDialog(false);
-            navigate('/tarefas');
-          }}
-        />
-      </div>
-    </DashboardLayout>
-  );
-}
