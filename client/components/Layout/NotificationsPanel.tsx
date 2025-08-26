@@ -134,6 +134,13 @@ const mockNotifications: Notification[] = [
     time: '3 horas atrás',
     read: false,
     actionable: true,
+    actionData: {
+      type: 'document',
+      id: '6',
+      page: '/documentos'
+    }
+  }
+];
 
 /**
  * Componente NotificationsPanel
