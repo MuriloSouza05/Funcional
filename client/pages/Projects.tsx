@@ -143,6 +143,12 @@ const mockProjects: Project[] = [
     assignedTo: ['Dr. Oliveira', 'Dr. Silva', 'Ana Paralegal'],
     priority: 'urgent',
     progress: 40,
+    createdAt: '2024-01-12T08:30:00Z',
+    updatedAt: '2024-01-23T16:20:00Z',
+    notes: 'Empresa em situação crítica. Necessário agilizar documentação.',
+    attachments: []
+  }
+];
 
 interface ProjectCompactViewProps {
   projects: Project[];
@@ -267,6 +273,11 @@ export function Projects() {
   const [editingProject, setEditingProject] = useState<Project | undefined>();
   const [viewingProject, setViewingProject] = useState<Project | null>(null);
   
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [priorityFilter, setPriorityFilter] = useState<string>('all');
+  const [viewMode, setViewMode] = useState<'kanban' | 'compact'>('kanban');
+
   // Replace mock data with real API calls
   const { 
     projects, 
@@ -280,11 +291,6 @@ export function Projects() {
     status: statusFilter === 'all' ? undefined : statusFilter,
     priority: priorityFilter === 'all' ? undefined : priorityFilter
   });
-  
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [priorityFilter, setPriorityFilter] = useState<string>('all');
-  const [viewMode, setViewMode] = useState<'kanban' | 'compact'>('kanban');
 
   // Filter projects based on search, status, and priority
   const filteredProjects = useMemo(() => {
@@ -326,20 +332,19 @@ export function Projects() {
     },
   ];
 
+  const handleAddProject = (status: ProjectStatus) => {
+    setEditingProject(undefined);
+    setShowProjectForm(true);
+  };
+
+  const handleEditProject = (project: Project) => {
+    setEditingProject(project);
+    setShowProjectForm(true);
+  };
+
   const handleSubmitProject = async (data: any) => {
     try {
-    if (editingProject) {
-      setProjects(projects.map(project =>
-        project.id === editingProject.id
-          ? {
-              ...project,
-              ...data,
-              startDate: data.startDate + 'T00:00:00Z',
-              dueDate: data.dueDate + 'T00:00:00Z',
-              updatedAt: new Date().toISOString(),
-              assignedTo: project.assignedTo, // Keep existing assignments
-              attachments: project.attachments, // Keep existing attachments
-            }
+      if (editingProject) {
         await updateProject(editingProject.id, {
           ...data,
           start_date: data.startDate,
@@ -348,18 +353,18 @@ export function Projects() {
           assigned_to: data.assignedTo,
           created_by: data.createdBy
         });
-      };
-      setProjects([...projects, newProject]);
+      } else {
         await createProject({
-    setShowProjectForm(false);
+          ...data,
           start_date: data.startDate,
           due_date: data.dueDate,
           client_name: data.clientName,
           assigned_to: data.assignedTo || ['Dr. Silva'],
           created_by: data.createdBy
         });
-    setEditingProject(project);
-    setShowProjectForm(true);
+      }
+      setShowProjectForm(false);
+      setEditingProject(undefined);
     } catch (error) {
       console.error('Erro ao salvar projeto:', error);
       alert('Erro ao salvar projeto. Tente novamente.');
@@ -376,11 +381,8 @@ export function Projects() {
   };
 
   const handleMoveProject = (projectId: string, newStatus: ProjectStatus) => {
-    setProjects(projects.map(project =>
-      project.id === projectId
-        ? { ...project, status: newStatus, updatedAt: new Date().toISOString() }
-        : project
-    ));
+    // This would be handled by the API in a real implementation
+    console.log('Moving project', projectId, 'to status', newStatus);
   };
 
   const handleViewProject = (project: Project) => {
@@ -431,6 +433,7 @@ export function Projects() {
       </DashboardLayout>
     );
   }
+
   return (
     <DashboardLayout>
       <div className="space-y-6 p-6">
