@@ -1,24 +1,14 @@
-import { prisma } from '../config/database';
-import { AccountType } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import crypto from 'crypto';
+import { supabase } from '../config/supabase';
 
 export interface CreateKeyRequest {
   tenantId?: string;
-  accountType: AccountType;
+  accountType: 'SIMPLES' | 'COMPOSTA' | 'GERENCIAL';
   usesAllowed?: number;
   expiresAt?: Date;
   singleUse?: boolean;
   metadata?: any;
-}
-
-export interface UseKeyRequest {
-  key: string;
-  email: string;
-  password: string;
-  name: string;
-  ipAddress?: string;
-  userAgent?: string;
 }
 
 export class RegistrationKeyService {
@@ -28,148 +18,79 @@ export class RegistrationKeyService {
     const keyHash = await bcrypt.hash(key, 12);
 
     // Create key record
-    await prisma.registrationKey.create({
-      data: {
-        keyHash,
-        tenantId: request.tenantId,
-        accountType: request.accountType,
-        usesAllowed: request.usesAllowed || 1,
-        usesLeft: request.usesAllowed || 1,
-        singleUse: request.singleUse ?? true,
-        expiresAt: request.expiresAt,
-        metadata: request.metadata,
-        createdBy,
-        usedLogs: [],
-      },
+    const { error } = await supabase.from('registration_keys').insert({
+      key_hash: keyHash,
+      tenant_id: request.tenantId,
+      account_type: request.accountType,
+      uses_allowed: request.usesAllowed || 1,
+      uses_left: request.usesAllowed || 1,
+      single_use: request.singleUse ?? true,
+      expires_at: request.expiresAt?.toISOString(),
+      metadata: request.metadata || {},
+      created_by: createdBy,
+      used_logs: [],
     });
+
+    if (error) {
+      throw new Error(`Failed to create registration key: ${error.message}`);
+    }
 
     return key; // Return plain key only once
   }
 
-  async validateAndUseKey(request: UseKeyRequest): Promise<{
-    tenantId: string;
-    accountType: AccountType;
-    isNewTenant: boolean;
-  }> {
-    // Find all non-revoked, non-expired keys
-    const keys = await prisma.registrationKey.findMany({
-      where: {
-        revoked: false,
-        usesLeft: { gt: 0 },
-        OR: [
-          { expiresAt: null },
-          { expiresAt: { gt: new Date() } },
-        ],
-      },
-      include: { tenant: true },
-    });
-
-    // Find matching key
-    let validKey = null;
-    for (const keyRecord of keys) {
-      const isValid = await bcrypt.compare(request.key, keyRecord.keyHash);
-      if (isValid) {
-        validKey = keyRecord;
-        break;
-      }
-    }
-
-    if (!validKey) {
-      throw new Error('Invalid, expired, or revoked registration key');
-    }
-
-    // Check if email already exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email: request.email },
-    });
-
-    if (existingUser) {
-      throw new Error('Email already registered');
-    }
-
-    let tenantId = validKey.tenantId;
-    let isNewTenant = false;
-
-    // Create tenant if needed
-    if (!tenantId) {
-      const { tenantService } = await import('./tenantService');
-      tenantId = await tenantService.createTenant(`Tenant for ${request.email}`);
-      isNewTenant = true;
-    }
-
-    // Create user
-    const { authService } = await import('../middleware/auth');
-    const hashedPassword = await authService.hashPassword(request.password);
-
-    await prisma.user.create({
-      data: {
-        email: request.email,
-        password: hashedPassword,
-        name: request.name,
-        accountType: validKey.accountType,
-        tenantId: tenantId!,
-        isActive: true,
-      },
-    });
-
-    // Update key usage
-    const updatedUsedLogs = Array.isArray(validKey.usedLogs) ? validKey.usedLogs : [];
-    updatedUsedLogs.push({
-      email: request.email,
-      ipAddress: request.ipAddress,
-      userAgent: request.userAgent,
-      usedAt: new Date().toISOString(),
-    });
-
-    await prisma.registrationKey.update({
-      where: { id: validKey.id },
-      data: {
-        usesLeft: validKey.usesLeft - 1,
-        usedLogs: updatedUsedLogs,
-        ...(validKey.singleUse && { revoked: true }),
-      },
-    });
-
-    return {
-      tenantId: tenantId!,
-      accountType: validKey.accountType,
-      isNewTenant,
-    };
-  }
-
   async listKeys(tenantId?: string) {
-    return await prisma.registrationKey.findMany({
-      where: tenantId ? { tenantId } : {},
-      include: { tenant: true },
-      orderBy: { createdAt: 'desc' },
-    });
+    let query = supabase
+      .from('registration_keys')
+      .select(`
+        *,
+        tenants(name)
+      `)
+      .order('created_at', { ascending: false });
+
+    if (tenantId) {
+      query = query.eq('tenant_id', tenantId);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      throw new Error(`Failed to list keys: ${error.message}`);
+    }
+
+    return data;
   }
 
   async revokeKey(keyId: string) {
-    return await prisma.registrationKey.update({
-      where: { id: keyId },
-      data: { revoked: true },
-    });
+    const { error } = await supabase
+      .from('registration_keys')
+      .update({ revoked: true })
+      .eq('id', keyId);
+
+    if (error) {
+      throw new Error(`Failed to revoke key: ${error.message}`);
+    }
   }
 
   async getKeyUsage(keyId: string) {
-    const key = await prisma.registrationKey.findUnique({
-      where: { id: keyId },
-    });
+    const { data: key, error } = await supabase
+      .from('registration_keys')
+      .select('*')
+      .eq('id', keyId)
+      .single();
 
-    if (!key) {
+    if (error || !key) {
       throw new Error('Key not found');
     }
 
     return {
       id: key.id,
-      accountType: key.accountType,
-      usesAllowed: key.usesAllowed,
-      usesLeft: key.usesLeft,
-      usedLogs: key.usedLogs,
+      accountType: key.account_type,
+      usesAllowed: key.uses_allowed,
+      usesLeft: key.uses_left,
+      usedLogs: key.used_logs,
       revoked: key.revoked,
-      expiresAt: key.expiresAt,
-      createdAt: key.createdAt,
+      expiresAt: key.expires_at,
+      createdAt: key.created_at,
     };
   }
 }
